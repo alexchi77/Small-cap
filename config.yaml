@@ -1,0 +1,31 @@
+polygon_api_key: ""
+openai_api_key: ""
+data_path: "data/historical_halts.csv"
+output_dir: "outputs"
+intraday_bar_minutes: 5
+vwap_window_minutes: 390   
+slippage_per_share: 0.03   
+fixed_risk_dollars: 500    
+max_position_pct_equity: 0.02
+min_price: 3.0
+min_premarket_volume: 1000000
+float_max: 100000000
+market_cap_max: 1000000000
+train_test_split_date: "2025-01-01"
+model_params:
+  xgboost:
+    n_estimators: 500
+    max_depth: 5
+    learning_rate: 0.05
+    subsample: 0.8
+news:
+  use_openai: true
+  openai_model: "gpt-4o-mini"
+  max_tokens: 512
+  classify_temperature: 0.0
+  keywords:
+    earnings: ["earn", "q1","q2","q3","q4","quarter","revenue","eps"]
+    fda: ["fda","approval","cleared","approval"]
+    ipo: ["ipo","uplist","spac","listing"]
+    merger: ["acqui","merger","merger","deal","buyout"]
+    offering: ["offering","secondary","raise","share offering"]

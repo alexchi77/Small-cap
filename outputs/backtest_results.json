@@ -1,0 +1,268 @@
+{
+  "model_evaluation": {
+    "accuracy": 0.7868625277161863,
+    "roc_auc": 0.8890859642899374
+  },
+  "backtest_metrics": {
+    "total_trades": 2961,
+    "win_rate": 0.05167173252279635,
+    "total_pnl": -566360.5849158771,
+    "avg_win": 43.84690400919445,
+    "avg_loss": -204.88707945272927,
+    "profit_factor": 0.011706399100269617,
+    "avg_time_to_fade_minutes": 3.6008861622358554,
+    "intraday_pct": 0.994596420128335,
+    "multi_day_pct": 0.005403579871664978,
+    "gap_fill_probability": 0.9908814589665653,
+    "sharpe_ratio": -19.19827552880491,
+    "max_drawdown": -5.661848439608035,
+    "max_drawdown_magnitude": 5.661848439608035,
+    "category_metrics": {
+      "UNKNOWN": {
+        "count": 2930,
+        "win_rate": 0.05187713310580205,
+        "avg_pnl": -191.77285552404197
+      },
+      " 'author': 'Avi Kapoor'": {
+        "count": 2,
+        "win_rate": 0.0,
+        "avg_pnl": -138.5203986824589
+      },
+      " 'author': 'Lisa Levin'": {
+        "count": 7,
+        "win_rate": 0.14285714285714285,
+        "avg_pnl": -102.60977426877689
+      },
+      " Amyris": {
+        "count": 1,
+        "win_rate": 0.0,
+        "avg_pnl": -183.76237461037118
+      },
+      " Cardano": {
+        "count": 2,
+        "win_rate": 0.0,
+        "avg_pnl": -132.36623795468714
+      },
+      " 'author': 'Piero Cingari'": {
+        "count": 3,
+        "win_rate": 0.0,
+        "avg_pnl": -113.68391608120278
+      },
+      " 'author': 'newsfeedback@fool.com (Bram Berkowitz)'": {
+        "count": 2,
+        "win_rate": 0.0,
+        "avg_pnl": -96.59157904801495
+      },
+      " 'author': 'GX Acquisition Corp. II'": {
+        "count": 1,
+        "win_rate": 0.0,
+        "avg_pnl": -200.66217154189377
+      },
+      " 'author': 'Zacks Equity Research'": {
+        "count": 6,
+        "win_rate": 0.0,
+        "avg_pnl": -176.24788340050353
+      },
+      " 'author': 'newsfeedback@fool.com (Matthew Frankel": {
+        "count": 1,
+        "win_rate": 0.0,
+        "avg_pnl": -133.76293796036143
+      },
+      " 'author': 'Mark Vickery'": {
+        "count": 2,
+        "win_rate": 0.0,
+        "avg_pnl": -133.76293796036143
+      },
+      " 'author': 'newsfeedback@fool.com (Dan Caplinger)'": {
+        "count": 2,
+        "win_rate": 0.0,
+        "avg_pnl": -133.76293796036143
+      },
+      " the New \"\"Gold\"\"": {
+        "count": 1,
+        "win_rate": 0.0,
+        "avg_pnl": -176.44
+      },
+      "NO_NEWS_PARABOLIC": {
+        "count": 1,
+        "win_rate": 0.0,
+        "avg_pnl": -384.67509458159714
+      }
+    },
+    "price_bucket_metrics": {
+      "5_10": {
+        "count": 1399,
+        "win_rate": 0.07076483202287348,
+        "avg_pnl": -175.04632551053825
+      },
+      "20_50": {
+        "count": 426,
+        "win_rate": 0.035211267605633804,
+        "avg_pnl": -106.11586378294619
+      },
+      "10_20": {
+        "count": 1136,
+        "win_rate": 0.03433098591549296,
+        "avg_pnl": -243.19138869286886
+      }
+    }
+  },
+  "feature_importance": [
+    {
+      "feature": "weakness_confirmed",
+      "importance": 0.4695988595485687
+    },
+    {
+      "feature": "gap_direction_down",
+      "importance": 0.11168684810400009
+    },
+    {
+      "feature": "gap_from_prev_close",
+      "importance": 0.0633818730711937
+    },
+    {
+      "feature": "gap_size",
+      "importance": 0.03208446875214577
+    },
+    {
+      "feature": "halt_timing_score",
+      "importance": 0.026866169646382332
+    },
+    {
+      "feature": "category_GAP_DOWN",
+      "importance": 0.025279061868786812
+    },
+    {
+      "feature": "halt_hour",
+      "importance": 0.019265590235590935
+    },
+    {
+      "feature": "is_gap_down",
+      "importance": 0.018632398918271065
+    },
+    {
+      "feature": "hod_rejection",
+      "importance": 0.01801762357354164
+    },
+    {
+      "feature": "gap_momentum",
+      "importance": 0.01775120571255684
+    },
+    {
+      "feature": "time_of_day_morning",
+      "importance": 0.015052542090415955
+    },
+    {
+      "feature": "distance_from_vwap",
+      "importance": 0.014283260330557823
+    },
+    {
+      "feature": "time_of_day_late_day",
+      "importance": 0.014000761322677135
+    },
+    {
+      "feature": "price_volume_ratio",
+      "importance": 0.012944080866873264
+    },
+    {
+      "feature": "avg_volume",
+      "importance": 0.0117079121991992
+    },
+    {
+      "feature": "total_volume",
+      "importance": 0.01058171596378088
+    },
+    {
+      "feature": "vwap_distance_ratio",
+      "importance": 0.010347509756684303
+    },
+    {
+      "feature": "pre_halt_vol_ratio",
+      "importance": 0.009686719626188278
+    },
+    {
+      "feature": "multiple_gap_downs",
+      "importance": 0.009454808197915554
+    },
+    {
+      "feature": "news_volume_interaction",
+      "importance": 0.009394130669534206
+    },
+    {
+      "feature": "vwap_extended",
+      "importance": 0.00908695999532938
+    },
+    {
+      "feature": "volume_std",
+      "importance": 0.00877095852047205
+    },
+    {
+      "feature": "current_price",
+      "importance": 0.008085561916232109
+    },
+    {
+      "feature": "pre_halt_return",
+      "importance": 0.00808282196521759
+    },
+    {
+      "feature": "parabolic_pct",
+      "importance": 0.007810617797076702
+    },
+    {
+      "feature": "price_bucket_5_10",
+      "importance": 0.006209982093423605
+    },
+    {
+      "feature": "price_bucket_10_20",
+      "importance": 0.00618598610162735
+    },
+    {
+      "feature": "price_bucket_20_50",
+      "importance": 0.005843157880008221
+    },
+    {
+      "feature": "category_MULTIPLE_GAP_DOWN",
+      "importance": 0.005815380718559027
+    },
+    {
+      "feature": "gap_direction_neutral",
+      "importance": 0.00556712644174695
+    },
+    {
+      "feature": "time_of_day_midday",
+      "importance": 0.0046822382137179375
+    },
+    {
+      "feature": "halt_minute",
+      "importance": 0.00384162669070065
+    },
+    {
+      "feature": "news_sentiment",
+      "importance": 0.0
+    },
+    {
+      "feature": "news_strength",
+      "importance": 0.0
+    },
+    {
+      "feature": "multiple_halts",
+      "importance": 0.0
+    },
+    {
+      "feature": "is_biotech",
+      "importance": 0.0
+    },
+    {
+      "feature": "volume_acceleration",
+      "importance": 0.0
+    },
+    {
+      "feature": "category_UNKNOWN",
+      "importance": 0.0
+    },
+    {
+      "feature": "gap_direction_up",
+      "importance": 0.0
+    }
+  ]
+}
