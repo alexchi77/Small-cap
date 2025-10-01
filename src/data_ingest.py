@@ -21,7 +21,7 @@ def load_local_halts(path=None):
     return df
 
 def fetch_bars_polygon(ticker, start_dt, end_dt, timespan="minute", limit=50000):
-    url = f"{BASE}/v2/aggs/ticker/{ticker}/range/1/{timespan}/{start_dt.strftime('%Y-%m-%d')}/{end_dt.strftime('%Y-%m-%d')}"
+    url = f"{BASE}/v2/aggs/ticker/{ticker}/range/5/{timespan}/{start_dt.strftime('%Y-%m-%d')}/{end_dt.strftime('%Y-%m-%d')}"
     params = {"adjusted": "true", "sort": "asc", "limit": limit, "apiKey": POLY_KEY}
     r = requests.get(url, params=params, timeout=30)
     if r.status_code != 200:
@@ -48,17 +48,17 @@ def fetch_news_polygon(ticker, start_dt, end_dt):
     print(data)
     return data.get("results", [])
 
-def enrich_single_halt(row, pre_minutes=60, post_minutes=60, timespan="minute"):
+def enrich_single_halt(row, pre_days=1, post_days=7, timespan="minute"):
     t0 = pd.to_datetime(row['halt_time'])
-    start = (t0 - pd.Timedelta(minutes=pre_minutes)).tz_localize(None)
-    end = (t0 + pd.Timedelta(minutes=post_minutes)).tz_localize(None)
+    start = (t0 - pd.Timedelta(days=pre_days)).tz_localize(None)
+    end = (t0 + pd.Timedelta(days=post_days)).tz_localize(None)
     try:
         bars = fetch_bars_polygon(row['Symbol'], start, end, timespan=timespan)
     except Exception as e:
         print("Polygon bars error:", e)
         bars = pd.DataFrame()
     try:
-        news_items = fetch_news_polygon(row['Symbol'], start - pd.Timedelta(minutes=30), end + pd.Timedelta(minutes=0))
+        news_items = fetch_news_polygon(row['Symbol'], start + pd.Timedelta(hours=23), end - pd.Timedelta(hours=24*6 + 22))
         print(news_items)
     except Exception as e:
         print("Polygon news error:", e)
@@ -80,14 +80,43 @@ def enrich_single_halt(row, pre_minutes=60, post_minutes=60, timespan="minute"):
         "news_classified": classified
     }
 
-def enrich_halts_with_bars_and_news(halts_df, pre_minutes=60, post_minutes=60, bar_timespan="minute"):
+def enrich_halts_with_bars_and_news(
+    halts_df, pre_days=1, post_days=7, bar_timespan="minute", checkpoint_path="halts_enriched.pkl"
+):
+    ensure_dir(cfg.get('output_dir', 'outputs'))
+
+    # --- Resume Support ---
+    if Path(checkpoint_path).exists():
+        enriched = pd.read_pickle(checkpoint_path)
+        done = set(enriched['ticker'].astype(str) + "_" + enriched['halt_time'].astype(str))
+        print(f"Resuming: {len(done)} halts already processed.")
+    else:
+        enriched = pd.DataFrame()
+        done = set()
+
     rows = []
-    ensure_dir(cfg.get('output_dir','outputs'))
     i = 0
-    for _,row in halts_df.iterrows():
-        e = enrich_single_halt(row, pre_minutes=pre_minutes, post_minutes=post_minutes, timespan=bar_timespan)
+
+    for _, row in halts_df.iterrows():
+        key = f"{row['Symbol']}_{row['halt_time']}"
+        if key in done:
+            continue  # already processed
+
+        e = enrich_single_halt(row, pre_days=pre_days, post_days=post_days, timespan=bar_timespan)
         rows.append(e)
         i += 1
-        # print(e)
+
+        # Save checkpoint frequently (every 10 halts)
+        if i % 100 == 0:
+            combined = pd.concat([enriched, pd.DataFrame(rows)], ignore_index=True)
+            combined.to_pickle(checkpoint_path)
+            print(f"Checkpoint saved after {i} new halts.")
+
         time.sleep(0.25)
-    return pd.DataFrame(rows)
+
+    # Final save
+    if rows:
+        enriched = pd.concat([enriched, pd.DataFrame(rows)], ignore_index=True)
+        enriched.to_pickle(checkpoint_path)
+
+    return enriched

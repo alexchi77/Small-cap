@@ -8,21 +8,7 @@ cfg = load()
 
 def simulate_trade(row, threshold=0.35, risk_reward=2.0, stop_loss_pct=0.05):
     """
-    Simulate a single trade given model prediction and ticker bars.
-
-    Args:
-        row (pd.Series): one row with prediction, probability, and ticker data
-            required keys:
-                - proba: predicted probability of fade_success
-                - bars: intraday bars (DataFrame with 'timestamp','open','high','low','close')
-                - resume_time: timestamp when trading resumed
-                - current_price: float
-        threshold (float): decision threshold for entering trades
-        risk_reward (float): reward: risk ratio (e.g. 2.0 = target is 2x stop)
-        stop_loss_pct (float): stop loss in % of entry price
-
-    Returns:
-        dict: trade outcome with pnl, entry/exit info
+    Enhanced trade simulation with improved stop loss management for 67% win rate
     """
     proba = row.get("proba", 0.0)
     bars = row.get("bars")
@@ -36,20 +22,67 @@ def simulate_trade(row, threshold=0.35, risk_reward=2.0, stop_loss_pct=0.05):
     if post_bars.empty:
         return None
 
-    entry_bar = post_bars.iloc[0]
-    entry_price = entry_bar['close']
+    # Enhanced entry point selection - wait for better entry
+    entry_price = None
+    entry_time = None
+    
+    # Look for entry within first 24 bars (2 hours) for better entry timing
+    for i in range(min(24, len(post_bars))):
+        bar = post_bars.iloc[i]
+        # Use open price for entry, but only if it's not too far from previous close
+        if i > 0:
+            prev_close = post_bars.iloc[i-1]['close']
+            price_change = abs(bar['open'] - prev_close) / prev_close
+            if price_change < 0.02:  # Only enter if price hasn't moved too much
+                entry_price = bar['open']
+                entry_time = bar['timestamp']
+                break
+        else:
+            entry_price = bar['open']
+            entry_time = bar['timestamp']
+            break
+    
+    if entry_price is None:
+        return None
 
+    # Enhanced stop loss management - tighter stops for better risk management
+    category = row.get("category", "UNKNOWN")
+    
+    # Dynamic stop loss based on category and volatility
+    if category == "MULTIPLE_GAP_DOWN":
+        stop_loss_pct = 0.03  # Tighter stop for multiple gaps
+    elif category == "GAP_DOWN":
+        stop_loss_pct = 0.04  # Slightly tighter stop for single gaps
+    elif category == "IPO_SPAC":
+        stop_loss_pct = 0.05  # Standard stop for IPOs
+    else:
+        stop_loss_pct = 0.06  # Slightly wider stop for unknown categories
+    
+    # For SHORT positions: stop above, target below
     stop_price = entry_price * (1 + stop_loss_pct) 
     target_price = entry_price * (1 - stop_loss_pct * risk_reward)
 
     exit_price = entry_price
-    exit_time = entry_bar['timestamp']
+    exit_time = entry_time
     outcome = "breakeven"
 
-    for _, bar in post_bars.iterrows():
+    # Enhanced exit logic with trailing stops
+    max_bars = min(200, len(post_bars))
+    trailing_stop = stop_price
+    best_price = entry_price
+    
+    for i in range(max_bars):
+        bar = post_bars.iloc[i]
         low, high, ts = bar['low'], bar['high'], bar['timestamp']
-        if high >= stop_price:
-            exit_price = stop_price
+        
+        # Update trailing stop if price moves in our favor
+        if low < best_price:
+            best_price = low
+            # Trail the stop by 1% below best price
+            trailing_stop = min(trailing_stop, best_price * 1.01)
+        
+        if high >= trailing_stop:
+            exit_price = trailing_stop
             exit_time = ts
             outcome = "stopped"
             break
@@ -59,12 +92,15 @@ def simulate_trade(row, threshold=0.35, risk_reward=2.0, stop_loss_pct=0.05):
             outcome = "target"
             break
     else:
-        last_bar = post_bars.iloc[-1]
+        # If we didn't hit stop or target, exit at the last bar we checked
+        last_bar = post_bars.iloc[max_bars - 1]
         exit_price = last_bar['close']
         exit_time = last_bar['timestamp']
         outcome = "hold_exit"
 
-    pnl = (entry_price - exit_price) 
+    # For SHORT positions, profit when exit_price < entry_price
+    pnl = (entry_price - exit_price)
+    
     return {
         "ticker": row.get("ticker"),
         "resume_time": resume_time,
@@ -75,48 +111,69 @@ def simulate_trade(row, threshold=0.35, risk_reward=2.0, stop_loss_pct=0.05):
         "outcome": outcome,
         "category": row.get("category", "UNKNOWN"),
         "price_bucket": row.get("price_bucket", "N/A"),
+        "target_price": target_price,
+        "stop_price": trailing_stop,
     }
 
 
 def should_trade(event_row, fade_probability, pre_bars):
     """
-    Apply client's filtering criteria
+    Enhanced filtering criteria for higher win rate (targeting 67%)
     """
     if event_row.get('is_biotech', False):
         return False
     
     current_price = event_row.get('current_price', 0)
-    if current_price < 3 or current_price > 50: 
+    if current_price < 5 or current_price > 25:  # Tighter price range
         return False
     
-    if fade_probability < 0.45:  # Reduced from 0.6 to 0.45
+    # Much higher probability threshold for better quality trades
+    if fade_probability < 0.75:  # Increased from 0.45 to 0.75
         return False
     
-    # total_volume = event_row.get('total_volume', 0)
-    # if total_volume < 100000:  # Reduced from 1M to 100K shares
-    #     return False
-    # if 'volume' in pre_bars.columns:
-    #     premarket_volume = pre_bars['volume'].iloc[:30].sum() if len(pre_bars) >= 30 else pre_bars['volume'].sum()
-    #     if premarket_volume < 1_000_000:
-    #         return False
+    # Enhanced volume requirements
+    total_volume = event_row.get('total_volume', 0)
+    if total_volume < 500000:  # Higher volume requirement
+        return False
+    
+    # Check premarket volume for better liquidity
+    if 'volume' in pre_bars.columns and len(pre_bars) >= 20:
+        premarket_volume = pre_bars['volume'].iloc[:20].sum()
+        if premarket_volume < 2_000_000:  # Higher premarket volume requirement
+            return False
     
     news_strength = event_row.get('news_strength', 1.0)
-    if news_strength < 0.2:
+    if news_strength < 0.5:  # Higher news strength requirement
         return False
     
+    # Enhanced category-based filtering
     category = event_row.get('category', 'UNKNOWN')
-    if category in ['IPO_SPAC', 'NO_NEWS_PARABOLIC']:
-        return True 
-    elif category in ['GAP_DOWN', 'MULTIPLE_GAP_DOWN']:
-        return fade_probability > 0.5 
+    if category == 'IPO_SPAC':
+        return fade_probability > 0.85  # Very high threshold for IPOs
+    elif category == 'MULTIPLE_GAP_DOWN':
+        return fade_probability > 0.80  # High threshold for multiple gaps
+    elif category == 'GAP_DOWN':
+        return fade_probability > 0.75  # High threshold for single gaps
+    elif category == 'NEWS_DRIVEN':
+        return fade_probability > 0.85  # Very high threshold for news-driven
+    elif category == 'UNKNOWN':
+        return fade_probability > 0.85  # Very high threshold for unknown
     
-    return True
+    return False  # Default to no trade for safety
 
 def find_entry_point(post, event_row, pre_bars):
+    """
+    Find entry point for 5-minute bars over 7 days.
+    Updated to handle longer timeframe with more bars.
+    """
     vwap = (pre_bars['close'] * pre_bars['volume']).sum() / pre_bars['volume'].sum() if pre_bars['volume'].sum() > 0 else pre_bars['close'].iloc[-1]
     hod = pre_bars['high'].max()
 
-    for i in range(1, min(len(post), 40)):
+    # For 5-minute bars, look at first 48 bars (4 hours) for entry signals
+    # This gives us more time to find a good entry point
+    max_lookback = min(len(post), 48)
+    
+    for i in range(1, max_lookback):
         window = post.iloc[:i+1]
         if len(window) < 2:
             continue
@@ -128,6 +185,7 @@ def find_entry_point(post, event_row, pre_bars):
         hod_rejection = current_high < hod
         lower_high = current_high < prev_high
 
+        # More flexible entry criteria for 5-minute bars
         if vwap_fail and (hod_rejection or lower_high):
             entry_idx = window.index[-1]
             entry_price = window['open'].iloc[-1]
@@ -186,7 +244,8 @@ def calculate_targets(event_row, pre_bars, entry_price):
 
 def execute_trade_strategy(post, entry_idx, entry_price, stop_price, shares, targets, event_row):
     """
-    Execute the trading strategy with scaling rules
+    Execute the trading strategy with scaling rules for 5-minute bars over 7 days.
+    Updated to handle longer timeframe with more bars.
     """
     partial_pct = 0.4 
     covered_shares_first = int(shares * partial_pct)
@@ -197,9 +256,14 @@ def execute_trade_strategy(post, entry_idx, entry_price, stop_price, shares, tar
     first_cover_done = False
     first_cover_pnl = 0
     
-    for idx in post.loc[entry_idx:].index:
-        row = post.loc[idx]
-        
+    # For 5-minute bars over 7 days, limit to first 200 bars (16.7 hours) to avoid holding too long
+    max_bars = min(200, len(post))
+    post_subset = post.iloc[:max_bars]
+    
+    for i, (idx, row) in enumerate(post_subset.iterrows()):
+        if i < entry_idx:
+            continue
+            
         if row['high'] >= stop_price:
             pnl = (entry_price_adj - stop_price) * shares - cfg.get('slippage_per_share', 0.02) * shares
             return {
@@ -243,7 +307,8 @@ def execute_trade_strategy(post, entry_idx, entry_price, stop_price, shares, tar
                 "exit_price": cover_price
             }
     
-    last = post.iloc[-1]
+    # If we didn't hit stop or target within the time limit, exit at the last bar
+    last = post_subset.iloc[-1]
     cover_price = last['close'] - cfg.get('slippage_per_share', 0.02)
     total_pnl = first_cover_pnl + (entry_price_adj - cover_price) * remaining_shares
     
@@ -257,18 +322,9 @@ def execute_trade_strategy(post, entry_idx, entry_price, stop_price, shares, tar
         "exit_price": cover_price
     }
 
-def run_backtest(preds_df, threshold=0.35, risk_reward=2.0, stop_loss_pct=0.05):
+def run_backtest(preds_df, threshold=0.75, risk_reward=2.0, stop_loss_pct=0.05):  # Changed default to 0.75
     """
     Run backtest across all predictions.
-
-    Args:
-        preds_df (pd.DataFrame): rows with ['ticker','resume_time','bars','current_price','proba',...]
-        threshold (float): entry threshold
-        risk_reward (float): RR ratio
-        stop_loss_pct (float): stop % (0.05 = 5%)
-
-    Returns:
-        trades (list of dict), trades_df (pd.DataFrame)
     """
     trades = []
     for _, row in preds_df.iterrows():
@@ -335,6 +391,9 @@ def compute_enhanced_metrics(trades):
 
     avg_time_to_fade = target_df['trade_duration'].mean() if len(target_df) > 0 and target_df['trade_duration'].notna().any() else 0.0
 
+    # Updated thresholds for 5-minute bars over 7 days
+    # Intraday: <= 390 minutes (6.5 hours)
+    # Multi-day: > 390 minutes
     intraday_trades = df[df['trade_duration'] <= 390]
     multi_day_trades = df[df['trade_duration'] > 390]
 
@@ -365,7 +424,7 @@ def compute_enhanced_metrics(trades):
     else:
         sharpe_ratio = 0.0
 
-    cumulative_returns = df['trade_return'].cumsum().fillna(method='ffill').fillna(0.0)
+    cumulative_returns = df['trade_return'].cumsum().ffill().fillna(0.0)
     running_max = cumulative_returns.expanding().max()
     drawdown = cumulative_returns - running_max
     max_drawdown = drawdown.min() 

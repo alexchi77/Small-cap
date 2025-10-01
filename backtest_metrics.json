@@ -1,0 +1,9 @@
+{
+  "optimal_threshold": 0.35,
+  "total_trades": 5389,
+  "win_rate": 0.5496381517906848,
+  "total_pnl": 2926.5359149999986,
+  "profit_factor": 4.662246867185848,
+  "sharpe_ratio": 2.866521485451715,
+  "max_drawdown": 0.00017530174999998843
+}

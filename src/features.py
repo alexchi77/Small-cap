@@ -310,7 +310,9 @@ def detect_multiple_gap_downs(bars):
 
 def detect_biotech(row):
     """Detect if the stock is likely biotech (for filtering)"""
-    ticker = row.get('ticker', '').upper()
+    # print(row.get('ticker', ''))
+    ticker = str(row.get("ticker", "") or "").upper()
+    # desc   = str(row.get("description", "") or "").lower()
     reason = str(row.get('reason', '')).lower()
     
     biotech_keywords = ['fda', 'clinical', 'trial', 'drug', 'pharma', 'biotech', 'therapeutic']
@@ -360,7 +362,7 @@ def featurize_enriched(enriched_df):
 
 def compute_enhanced_features(bars, row):
     """
-    Compute enhanced features based on client's strategy requirements
+    Enhanced features for 67% win rate targeting
     """
     if bars.empty:
         return {}
@@ -371,36 +373,114 @@ def compute_enhanced_features(bars, row):
     features['current_price'] = current_price
     features['price_bucket'] = get_price_bucket(current_price)
     
+    # Enhanced volume analysis
     total_volume = bars['volume'].sum()
     features['total_volume'] = total_volume
     features['avg_volume'] = bars['volume'].mean()
     features['volume_std'] = bars['volume'].std() if len(bars) > 1 else 0
+    
+    # Volume momentum and acceleration
+    if len(bars) >= 10:
+        recent_vol = bars['volume'].iloc[-5:].mean()
+        early_vol = bars['volume'].iloc[:5].mean()
+        features['volume_acceleration'] = recent_vol / (early_vol + 1e-9)
+    else:
+        features['volume_acceleration'] = 1.0
+    
+    # Volume percentile and trend
+    features['volume_percentile'] = bars['volume'].rank(pct=True).iloc[-1]
+    if len(bars) > 1:
+        features['volume_trend'] = np.polyfit(range(len(bars)), bars['volume'], 1)[0]
+    else:
+        features['volume_trend'] = 0
     
     halt_time = pd.to_datetime(row['halt_time'])
     features['halt_hour'] = halt_time.hour
     features['halt_minute'] = halt_time.minute
     features['time_of_day'] = get_time_of_day_category(halt_time)
     
+    # Enhanced VWAP analysis
     vwap = compute_vwap(bars)
     features['distance_from_vwap'] = (current_price - vwap) / vwap if vwap > 0 else 0
     features['vwap_extended'] = abs(features['distance_from_vwap']) > 0.05 
+    
+    # VWAP momentum
+    if len(bars) >= 20:
+        vwap_20 = compute_vwap(bars.iloc[-20:])
+        features['vwap_momentum'] = (vwap - vwap_20) / vwap_20 if vwap_20 > 0 else 0
+    else:
+        features['vwap_momentum'] = 0
     
     pre_halt_close = bars['close'].iloc[0] if len(bars) > 0 else current_price
     halt_open = bars['open'].iloc[-1] if len(bars) > 0 else current_price
     features['gap_size'] = (halt_open - pre_halt_close) / pre_halt_close if pre_halt_close > 0 else 0
     features['gap_direction'] = 'up' if features['gap_size'] > 0.02 else 'down' if features['gap_size'] < -0.02 else 'neutral'
     
+    # Enhanced gap analysis
+    features['gap_momentum'] = 0
+    gap_count = 0
+    for i in range(1, len(bars)):
+        prev_close = bars['close'].iloc[i-1]
+        current_open = bars['open'].iloc[i]
+        gap_pct = (current_open - prev_close) / prev_close if prev_close > 0 else 0
+        if gap_pct < -0.02:
+            gap_count += 1
+            features['gap_momentum'] += gap_pct
+    features['gap_count'] = gap_count
+    
     features['multiple_halts'] = detect_multiple_halts(bars)
     
+    # Enhanced support/resistance analysis
     features['hod'] = bars['high'].max()
     features['lod'] = bars['low'].min()
     features['hod_rejection'] = current_price < features['hod'] * 0.98 
     features['weakness_confirmed'] = features['hod_rejection'] and current_price < vwap
     
+    # Distance to key levels
+    features['distance_to_hod'] = (features['hod'] - current_price) / current_price
+    features['distance_to_lod'] = (current_price - features['lod']) / current_price
+    
+    # Technical indicators
+    if len(bars) >= 20:
+        # RSI calculation
+        price_changes = bars['close'].diff().dropna()
+        gains = price_changes[price_changes > 0].sum()
+        losses = abs(price_changes[price_changes < 0].sum())
+        rs = gains / (losses + 1e-9)
+        features['rsi'] = 100 - (100 / (1 + rs))
+        
+        # Bollinger Bands
+        sma = bars['close'].rolling(window=20).mean().iloc[-1]
+        std = bars['close'].rolling(window=20).std().iloc[-1]
+        features['bb_position'] = (current_price - sma) / (2 * std + 1e-9)
+    else:
+        features['rsi'] = 50
+        features['bb_position'] = 0
+    
+    # Momentum analysis
+    if len(bars) >= 10:
+        features['short_momentum'] = (bars['close'].iloc[-3:].mean() / bars['close'].iloc[-6:-3].mean()) - 1.0
+        features['long_momentum'] = (bars['close'].iloc[-10:].mean() / bars['close'].iloc[:10].mean()) - 1.0
+    else:
+        features['short_momentum'] = 0
+        features['long_momentum'] = 0
+    
+    # Volume-price relationship
+    features['volume_price_correlation'] = bars['volume'].corr(bars['close'])
+    
+    # Market structure
+    higher_highs = 0
+    lower_lows = 0
+    for i in range(2, len(bars)):
+        if bars['high'].iloc[i] > bars['high'].iloc[i-1] > bars['high'].iloc[i-2]:
+            higher_highs += 1
+        if bars['low'].iloc[i] < bars['low'].iloc[i-1] < bars['low'].iloc[i-2]:
+            lower_lows += 1
+    features['market_structure'] = higher_highs - lower_lows
+    
     features['news_strength'] = compute_news_strength(row.get('news_classified', []))
     
     features['second_day_continuation'] = 0 
-    
     features['float_bucket'] = 'unknown' 
     
     return features

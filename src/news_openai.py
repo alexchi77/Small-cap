@@ -35,7 +35,6 @@ def classify_single_article(article):
             max_tokens=cfg['news'].get('max_tokens',256)
         )
         text = resp.choices[0].message['content']
-        # try to parse JSON inside text (best-effort)
         import json, re
         m = re.search(r'\{.*\}', text, flags=re.S)
         if m:
@@ -49,10 +48,8 @@ def classify_single_article(article):
                 "sentiment": parsed.get('sentiment')
             }
         else:
-            # fallback classification by keywords (if model output not JSON)
             return _keyword_fallback(article)
     except Exception as e:
-        # fallback to keyword classifier
         return _keyword_fallback(article)
 
 def _keyword_fallback(article):
